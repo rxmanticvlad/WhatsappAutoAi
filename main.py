@@ -151,9 +151,38 @@ def _whatsapp_browser_worker():
             whatsapp_qr_data = None
 
         driver.set_page_load_timeout(60)
+        
         driver.get("https://web.whatsapp.com/")
 
-        app.logger.info("WhatsApp Web page loaded")
+        app.logger.info("WhatsApp Web navigation completed")
+
+        time.sleep(10)
+
+        app.logger.info("WhatsApp page title: %s", driver.title)
+        app.logger.info("WhatsApp page URL: %s", driver.current_url)
+
+        try:
+            body_text = driver.find_element(
+                By.TAG_NAME, "body"
+            ).text
+
+            app.logger.info(
+                "WhatsApp page text: %s",
+                body_text[:1000]
+            )
+        except Exception:
+            app.logger.exception("Could not read WhatsApp page text")
+
+        app.logger.info(
+            "WhatsApp canvas count: %s",
+            len(driver.find_elements(By.TAG_NAME, "canvas"))
+        )
+
+        app.logger.info(
+            "WhatsApp image count: %s",
+            len(driver.find_elements(By.TAG_NAME, "img"))
+        )
+
 
         deadline = time.time() + 240
 
