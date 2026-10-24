@@ -102,6 +102,10 @@ def create_chrome_driver():
     options.add_argument("--disable-sync")
     options.add_argument("--disable-translate")
     options.add_argument("--no-first-run")
+    options.add_argument("--renderer-process-limit=2")
+options.add_argument("--disable-features=MediaRouter,OptimizationHints")
+options.add_argument("--js-flags=--max-old-space-size=128")
+options.add_argument("--disable-background-timer-throttling")
 
     driver_path = os.getenv(
         "CHROMEDRIVER_PATH"
