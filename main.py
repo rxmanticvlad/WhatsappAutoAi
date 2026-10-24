@@ -85,38 +85,27 @@ def require_qr_auth(func):
 # --------------------------------------------------
 
 
+
 def create_chrome_driver():
     options = Options()
-
     options.binary_location = os.getenv(
         "CHROME_BIN", "/usr/bin/chromium"
     )
 
-    
-options.add_argument("--headless")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--disable-gpu")
-options.add_argument("--window-size=800,600")
-options.add_argument("--disable-extensions")
-options.add_argument("--disable-background-networking")
-options.add_argument("--disable-sync")
-options.add_argument("--disable-translate")
-options.add_argument("--no-first-run")
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=800,600")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-background-networking")
+    options.add_argument("--disable-sync")
+    options.add_argument("--disable-translate")
+    options.add_argument("--no-first-run")
 
-    options.add_argument(
-        "--disable-blink-features=AutomationControlled"
-    )
-    options.add_argument(
-        "--user-agent=Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Safari/537.36"
-    )
-
-    driver_path = (
-        os.getenv("CHROMEDRIVER_PATH")
-        or shutil.which("chromedriver")
-    )
+    driver_path = os.getenv(
+        "CHROMEDRIVER_PATH"
+    ) or shutil.which("chromedriver")
 
     if driver_path:
         service = Service(executable_path=driver_path)
@@ -125,8 +114,9 @@ options.add_argument("--no-first-run")
 
     return webdriver.Chrome(
         service=service,
-        options=options,
+        options=options
     )
+
 
 
 # --------------------------------------------------
