@@ -202,7 +202,34 @@ def _whatsapp_browser_worker():
         driver.set_page_load_timeout(60)
         driver.get("https://web.whatsapp.com/")
 
-        app.logger.info("WhatsApp Web page loaded")
+                app.logger.info("WhatsApp Web page loaded")
+
+        time.sleep(10)
+
+        app.logger.info(
+            "WhatsApp page title: %s",
+            driver.title
+        )
+
+        app.logger.info(
+            "WhatsApp page URL: %s",
+            driver.current_url
+        )
+
+        app.logger.info(
+            "WhatsApp page text: %s",
+            driver.find_element(By.TAG_NAME, "body").text[:1500]
+        )
+
+        app.logger.info(
+            "Canvas count: %s",
+            len(driver.find_elements(By.TAG_NAME, "canvas"))
+        )
+
+        app.logger.info(
+            "Image count: %s",
+            len(driver.find_elements(By.TAG_NAME, "img"))
+        )
 
         deadline = time.time() + 240
 
