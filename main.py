@@ -344,18 +344,22 @@ def qr_page():
             document.getElementById('status').textContent =
               data.status;
 
-            const container =
-              document.getElementById('qr-container');
+            const container = document.getElementById('qr-container');
+let img = document.getElementById('whatsapp-qr');
 
-            container.replaceChildren();
+if (data.qr_available) {
+  if (!img) {
+    img = document.createElement('img');
+    img.id = 'whatsapp-qr';
+    img.alt = 'WhatsApp login QR code';
+    img.style.maxWidth = '100%';
+    container.appendChild(img);
+  }
 
-            if (data.qr_available) {
-              const img = document.createElement('img');
-              img.src = '/qr-image?t=' + Date.now();
-              img.alt = 'WhatsApp login QR code';
-              img.style.maxWidth = '100%';
-              container.appendChild(img);
-            }
+  img.src = '/qr-image?t=' + Date.now();
+} else if (img) {
+  img.remove();
+}
           } catch (error) {
             document.getElementById('status').textContent =
               'Could not get status. Refresh and try again.';
