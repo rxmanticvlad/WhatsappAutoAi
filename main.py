@@ -194,12 +194,12 @@ def _whatsapp_browser_worker():
         app.logger.info("Starting Chromium for WhatsApp Web")
         driver = create_chrome_driver()
 
-        with whatsapp_lock:
+                with whatsapp_lock:
             whatsapp_driver = driver
             whatsapp_status = "Opening WhatsApp Web..."
             whatsapp_qr_data = None
 
-                driver.set_page_load_timeout(60)
+        driver.set_page_load_timeout(60)
         driver.get("https://web.whatsapp.com/")
 
         app.logger.info("WhatsApp Web page loaded")
