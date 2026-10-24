@@ -92,11 +92,18 @@ def create_chrome_driver():
         "CHROME_BIN", "/usr/bin/chromium"
     )
 
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1280,1000")
+    
+options.add_argument("--headless")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.add_argument("--disable-gpu")
+options.add_argument("--window-size=800,600")
+options.add_argument("--disable-extensions")
+options.add_argument("--disable-background-networking")
+options.add_argument("--disable-sync")
+options.add_argument("--disable-translate")
+options.add_argument("--no-first-run")
+
     options.add_argument(
         "--disable-blink-features=AutomationControlled"
     )
