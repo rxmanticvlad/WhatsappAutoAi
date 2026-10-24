@@ -578,4 +578,7 @@ def generate_ai_reply(message: str) -> str:
             "Sorry, I'm unable to reply right now. "
             "I'll get back to you later."
         )
-          
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "10000"))
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
