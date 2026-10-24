@@ -1,47 +1,207 @@
 
+import json
 import os
+import re
+from pathlib import Path
+
+from flask import Flask, jsonify, request
 from openai import OpenAI
 
+app = Flask(__name__)
+
+# OpenAI configuration
 api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key) if api_key else None
 
-if not api_key:
-    raise RuntimeError(
-        "Missing OPENAI_API_KEY environment variable"
+# Authorized WhatsApp administrators
+ADMIN_NUMBERS = {
+    "+918004789374",
+    "+917039630284",
+    "+919063420648",
+}
+
+# Persistent storage. Set STATE_FILE to a persistent disk path
+# when deploying to a server with persistent storage.
+STATE_FILE = Path(os.getenv("STATE_FILE", "bot_state.json"))
+
+DEFAULT_STATE = {
+    "global_enabled": False,
+    "enabled_chats": [],
+    "disabled_chats": [],
+}
+
+
+def load_state():
+    try:
+        with STATE_FILE.open("r", encoding="utf-8") as file:
+            saved = json.load(file)
+        return {**DEFAULT_STATE, **saved}
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_STATE.copy()
+
+
+state = load_state()
+
+
+def save_state():
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary_file = STATE_FILE.with_suffix(".tmp")
+    temporary_file.write_text(
+        json.dumps(state, indent=2),
+        encoding="utf-8",
     )
+    temporary_file.replace(STATE_FILE)
 
-client = OpenAI(api_key=api_key)
+
+def normalize_number(value):
+    digits = re.sub(r"\D", "", value or "")
+    if not digits:
+        return None
+    return "+" + digits
 
 
-def generate_reply(message: str) -> str:
-    """Generate a short, natural AI reply to an incoming message."""
+def is_enabled(number):
+    if not state["global_enabled"]:
+        return False
+    if number in state["disabled_chats"]:
+        return False
+    if number in state["enabled_chats"]:
+        return True
+    return False
+
+
+def handle_admin_command(sender, command):
+    """Handle commands only from authorized admins."""
+    sender = normalize_number(sender)
+    if sender not in ADMIN_NUMBERS:
+        return "Unauthorized: admin commands are restricted."
+
+    parts = command.strip().split(maxsplit=1)
+    action = parts[0].lower()
+    target = parts[1].strip() if len(parts) > 1 else None
+
+    if action == "/status":
+        if target:
+            number = normalize_number(target)
+            if not number:
+                return "Usage: /status +countrycode_number"
+            status = "ON" if is_enabled(number) else "OFF"
+            return f"Auto-replies for {number}: {status}"
+
+        enabled = sorted(
+            number for number in state["enabled_chats"]
+            if is_enabled(number)
+        )
+        if not state["global_enabled"]:
+            return "Global auto-reply: OFF\nNo replies are currently active."
+        if not enabled:
+            return "Global auto-reply: ON\nNo chats are enabled."
+        return (
+            "WhatsApp AI Auto-Reply Status\n"
+            f"Global mode: ON\nEnabled chats: {len(enabled)}\n\n"
+            + "\n".join(enabled)
+        )
+
+    if action in ("/on", "/off"):
+        if not target:
+            return f"Usage: {action} +countrycode_number (or all)"
+
+        enable = action == "/on"
+
+        if target.lower() == "all":
+            state["global_enabled"] = enable
+            if enable:
+                return (
+                    "Global mode ON. Only individually enabled chats "
+                    "will receive AI replies."
+                )
+            return "Global mode OFF. All AI auto-replies are paused."
+
+        number = normalize_number(target)
+        if not number:
+            return "Please provide a valid phone number."
+
+        if enable:
+            if number not in state["enabled_chats"]:
+                state["enabled_chats"].append(number)
+            state["disabled_chats"] = [
+                n for n in state["disabled_chats"] if n != number
+            ]
+            # Enabling a chat also enables global mode.
+            state["global_enabled"] = True
+            result = f"Auto-replies enabled for {number}."
+        else:
+            state["disabled_chats"] = list(
+                set(state["disabled_chats"] + [number])
+            )
+            result = f"Auto-replies disabled for {number}."
+
+        save_state()
+        return result
+
+    return "Unknown command. Use /on, /off, or /status."
+
+
+def generate_reply(message):
+    if client is None:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
 
     response = client.responses.create(
         model="gpt-4.1-mini",
         instructions=(
-            "You are a friendly WhatsApp AI assistant. "
-            "Reply naturally and concisely. "
-            "Use the same language as the incoming message. "
-            "Do not pretend to be the account owner. "
-            "If a message is unclear, ask a brief question."
+            "You are a friendly AI assistant replying to incoming "
+            "WhatsApp messages. Be concise and natural. Use the same "
+            "language as the sender. Do not claim to be the account owner."
         ),
         input=message,
     )
-
     return response.output_text.strip()
 
 
+@app.get("/")
+def home():
+    return "WhatsApp AI service is running. WhatsApp integration is not connected."
+
+
+@app.get("/health")
+def health():
+    return jsonify({"ok": True, "whatsapp_connected": False})
+
+
+# Temporary testing endpoint.
+# Do not expose admin commands to an unauthenticated public endpoint.
+@app.post("/admin-command")
+def admin_command():
+    data = request.get_json(silent=True) or {}
+    sender = data.get("sender", "")
+    command = data.get("command", "")
+
+    if not isinstance(command, str):
+        return jsonify({"error": "Invalid command"}), 400
+
+    return jsonify({"result": handle_admin_command(sender, command)})
+
+
+@app.post("/reply")
+def reply():
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "")
+    number = normalize_number(data.get("sender", ""))
+
+    if not isinstance(message, str) or not message.strip():
+        return jsonify({"error": "Please provide a message."}), 400
+
+    if not number or not is_enabled(number):
+        return jsonify({"reply": None, "reason": "Auto-replies are OFF"})
+
+    try:
+        return jsonify({"reply": generate_reply(message)})
+    except Exception:
+        app.logger.exception("AI reply generation failed")
+        return jsonify({"error": "Could not generate a reply"}), 500
+
+
 if __name__ == "__main__":
-    print("WhatsApp AI reply component is ready.")
-
-    while True:
-        message = input("\nTest message (or type exit): ").strip()
-
-        if message.lower() == "exit":
-            break
-
-        if message:
-            try:
-                print("AI reply:", generate_reply(message))
-            except Exception as error:
-                print("Could not generate reply:", error)
-              
+    port = int(os.environ.get("PORT", "10000"))
+    app.run(host="0.0.0.0", port=port)
+    
