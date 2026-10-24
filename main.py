@@ -8,10 +8,57 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
+from functools import wraps
+import secrets
+import base64
 from openai import OpenAI
 
 app = Flask(__name__)
+QR_ACCESS_USER = os.getenv("QR_ACCESS_USER", "")
+QR_ACCESS_PASSWORD = os.getenv("QR_ACCESS_PASSWORD", "")
+
+
+def require_qr_auth(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        auth = request.authorization
+
+        if not QR_ACCESS_USER or not QR_ACCESS_PASSWORD:
+            return "QR access is not configured.", 503
+
+        if (
+            not auth
+            or not secrets.compare_digest(auth.username or "", QR_ACCESS_USER)
+            or not secrets.compare_digest(auth.password or "", QR_ACCESS_PASSWORD)
+        ):
+            return Response(
+                "Authentication required",
+                401,
+                {"WWW-Authenticate": 'Basic realm="WhatsApp QR"'},
+            )
+
+        return func(*args, **kwargs)
+    return wrapper
+
+
+@app.get("/qr")
+@require_qr_auth
+def qr_page():
+    return """
+    <!doctype html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>WhatsApp QR Setup</title>
+    </head>
+    <body style="font-family:Arial;max-width:600px;margin:40px auto;padding:16px">
+      <h2>WhatsApp QR Setup</h2>
+      <p>This page is protected, but the WhatsApp browser session is not connected yet.</p>
+      <p>The next step is to connect Selenium and display its live QR code here.</p>
+    </body>
+    </html>
+    """
 def create_chrome_driver():
     options = Options()
     options.binary_location = os.getenv(
