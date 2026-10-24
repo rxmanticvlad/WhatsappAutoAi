@@ -86,10 +86,11 @@ def require_qr_auth(func):
 
 
 
+
 def create_chrome_driver():
     options = Options()
     options.binary_location = os.getenv(
-        "CHROME_BIN", "/usr/bin/chromium"
+        "CHROME_BIN", "/usr/bin/google-chrome"
     )
 
     options.add_argument("--headless")
@@ -103,13 +104,15 @@ def create_chrome_driver():
     options.add_argument("--disable-translate")
     options.add_argument("--no-first-run")
     options.add_argument("--renderer-process-limit=2")
-options.add_argument("--disable-features=MediaRouter,OptimizationHints")
-options.add_argument("--js-flags=--max-old-space-size=128")
-options.add_argument("--disable-background-timer-throttling")
+    options.add_argument(
+        "--disable-features=MediaRouter,OptimizationHints"
+    )
+    options.add_argument("--js-flags=--max-old-space-size=128")
+    options.add_argument("--disable-background-timer-throttling")
 
-    driver_path = os.getenv(
-        "CHROMEDRIVER_PATH"
-    ) or shutil.which("chromedriver")
+    driver_path = os.getenv("CHROMEDRIVER_PATH") or shutil.which(
+        "chromedriver"
+    )
 
     if driver_path:
         service = Service(executable_path=driver_path)
@@ -118,8 +121,9 @@ options.add_argument("--disable-background-timer-throttling")
 
     return webdriver.Chrome(
         service=service,
-        options=options
+        options=options,
     )
+
 
 
 
