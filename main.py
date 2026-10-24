@@ -374,7 +374,9 @@ if (data.qr_available) {
 @app.get("/qr-status")
 @require_qr_auth
 def qr_status():
+    app.logger.info("DIAGNOSTIC: /qr-status endpoint reached")
     start_whatsapp_browser()
+    app.logger.info("DIAGNOSTIC: start_whatsapp_browser() returned")
 
     with whatsapp_lock:
         return jsonify({
