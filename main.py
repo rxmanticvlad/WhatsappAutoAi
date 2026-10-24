@@ -545,16 +545,37 @@ def should_reply_to(sender_number: str) -> bool:
         return bool(state.get("reply_all")) or sender_number in state.get("enabled_contacts", [])
 
 
+
 def generate_ai_reply(message: str) -> str:
     if not openai_client:
         return "Sorry, my AI reply service is not configured right now."
+
     try:
         response = openai_client.responses.create(
             model=OPENAI_MODEL,
             instructions=(
-                "You are a friendly personal WhatsApp assistant. Reply naturally and briefly, "
-                "usually in 1-3 sentences. Match the language and tone of the incoming message. "
-                "Do not claim to be the account owner. Do not send unsolicited follow-up messages. "
-                "If a request involves urgent danger, advise contacting local emergency services."
+                "You are a friendly personal WhatsApp assistant. "
+                "Reply naturally and briefly, usually in 1-3 sentences. "
+                "Match the language and tone of the incoming message. "
+                "Do not claim to be the account owner. "
+                "Do not send unsolicited follow-up messages. "
+                "If a request involves urgent danger, advise contacting "
+                "local emergency services."
             ),
+            input=message[:6000],
+        )
+
+        result = (getattr(response, "output_text", "") or "").strip()
+
+        if result:
+            return result[:3500]
+
+        return "Sorry, I couldn't prepare a reply just now."
+
+    except Exception:
+        log.exception("OpenAI reply generation failed")
+        return (
+            "Sorry, I'm unable to reply right now. "
+            "I'll get back to you later."
+        )
           
