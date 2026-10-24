@@ -134,12 +134,20 @@ def start_whatsapp_browser():
         whatsapp_status = "Starting Chromium..."
         whatsapp_qr_data = None
 
-    thread = threading.Thread(
-        target=_whatsapp_browser_worker,
-        daemon=True,
-        name="whatsapp-browser-worker",
-    )
-    thread.start()
+    app.logger.warning("DIAGNOSTIC: About to start WhatsApp worker")
+
+thread = threading.Thread(
+    target=_whatsapp_browser_worker,
+    daemon=True,
+    name="whatsapp-browser-worker",
+)
+
+thread.start()
+
+app.logger.warning(
+    "DIAGNOSTIC: WhatsApp worker thread started=%s",
+    thread.is_alive(),
+)
 
 
 def _whatsapp_browser_worker():
