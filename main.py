@@ -119,6 +119,7 @@ def create_chrome_driver():
 
 
 
+
 # --------------------------------------------------
 # WHATSAPP WEB WORKER
 # --------------------------------------------------
@@ -136,18 +137,17 @@ def start_whatsapp_browser():
 
     app.logger.warning("DIAGNOSTIC: About to start WhatsApp worker")
 
-thread = threading.Thread(
-    target=_whatsapp_browser_worker,
-    daemon=True,
-    name="whatsapp-browser-worker",
-)
+    thread = threading.Thread(
+        target=_whatsapp_browser_worker,
+        daemon=True,
+        name="whatsapp-browser-worker",
+    )
+    thread.start()
 
-thread.start()
-
-app.logger.warning(
-    "DIAGNOSTIC: WhatsApp worker thread started=%s",
-    thread.is_alive(),
-)
+    app.logger.warning(
+        "DIAGNOSTIC: WhatsApp worker thread started=%s",
+        thread.is_alive(),
+    )
 
 
 def _whatsapp_browser_worker():
@@ -159,7 +159,7 @@ def _whatsapp_browser_worker():
     driver = None
 
     try:
-        app.logger.info("Starting Chromium")
+        app.logger.warning("DIAGNOSTIC: Starting Chromium")
         driver = create_chrome_driver()
 
         with whatsapp_lock:
@@ -168,48 +168,40 @@ def _whatsapp_browser_worker():
             whatsapp_qr_data = None
 
         driver.set_page_load_timeout(60)
-        
         driver.get("https://web.whatsapp.com/")
 
-        app.logger.info("WhatsApp Web navigation completed")
-
+        app.logger.warning("DIAGNOSTIC: WhatsApp Web navigation completed")
         time.sleep(10)
 
-        app.logger.info("WhatsApp page title: %s", driver.title)
-        app.logger.info("WhatsApp page URL: %s", driver.current_url)
+        app.logger.warning("DIAGNOSTIC: WhatsApp title: %s", driver.title)
+        app.logger.warning("DIAGNOSTIC: WhatsApp URL: %s", driver.current_url)
 
         try:
-            body_text = driver.find_element(
-                By.TAG_NAME, "body"
-            ).text
-
-            app.logger.info(
-                "WhatsApp page text: %s",
-                body_text[:1000]
+            body_text = driver.find_element(By.TAG_NAME, "body").text
+            app.logger.warning(
+                "DIAGNOSTIC: WhatsApp page text: %s",
+                body_text[:500],
             )
         except Exception:
             app.logger.exception("Could not read WhatsApp page text")
 
-        app.logger.info(
-            "WhatsApp canvas count: %s",
-            len(driver.find_elements(By.TAG_NAME, "canvas"))
+        app.logger.warning(
+            "DIAGNOSTIC: WhatsApp canvas count: %s",
+            len(driver.find_elements(By.TAG_NAME, "canvas")),
         )
 
-        app.logger.info(
-            "WhatsApp image count: %s",
-            len(driver.find_elements(By.TAG_NAME, "img"))
+        app.logger.warning(
+            "DIAGNOSTIC: WhatsApp image count: %s",
+            len(driver.find_elements(By.TAG_NAME, "img")),
         )
-
 
         deadline = time.time() + 240
 
         while time.time() < deadline:
             try:
-                # Check whether WhatsApp is already logged in.
                 logged_in = driver.find_elements(
                     By.CSS_SELECTOR,
-                    '[aria-label="Chat list"], '
-                    '[data-testid="chat-list"]',
+                    '[aria-label="Chat list"], [data-testid="chat-list"]',
                 )
 
                 if logged_in:
@@ -220,17 +212,12 @@ def _whatsapp_browser_worker():
                             "Automatic replies are not connected yet."
                         )
 
-                    app.logger.info("WhatsApp login detected")
+                    app.logger.warning("DIAGNOSTIC: WhatsApp login detected")
                     return
 
-                # Look for visible, square QR canvases.
                 qr_png = None
 
-                canvases = driver.find_elements(
-                    By.CSS_SELECTOR, "canvas"
-                )
-
-                for canvas in canvases:
+                for canvas in driver.find_elements(By.CSS_SELECTOR, "canvas"):
                     try:
                         if not canvas.is_displayed():
                             continue
@@ -254,17 +241,14 @@ def _whatsapp_browser_worker():
                         continue
 
                 if qr_png:
-                    encoded = base64.b64encode(
-                        qr_png
-                    ).decode("ascii")
+                    encoded = base64.b64encode(qr_png).decode("ascii")
 
                     with whatsapp_lock:
                         whatsapp_qr_data = encoded
                         whatsapp_status = (
-                            "QR image captured. Scan it only if "
-                            "the displayed image is a valid QR code."
+                            "QR image captured. Scan only if it is "
+                            "a valid WhatsApp login QR."
                         )
-
                 else:
                     with whatsapp_lock:
                         if whatsapp_qr_data is None:
@@ -275,16 +259,11 @@ def _whatsapp_browser_worker():
                 time.sleep(3)
 
             except Exception:
-                app.logger.exception(
-                    "Error checking WhatsApp Web"
-                )
-
+                app.logger.exception("Error checking WhatsApp Web")
                 with whatsapp_lock:
                     whatsapp_status = (
-                        "WhatsApp page check failed. "
-                        "Check the Render logs."
+                        "WhatsApp page check failed. Check Render logs."
                     )
-
                 time.sleep(3)
 
         with whatsapp_lock:
@@ -298,19 +277,16 @@ def _whatsapp_browser_worker():
         app.logger.exception("WhatsApp browser startup failed")
 
         with whatsapp_lock:
-            whatsapp_status = (
-                "Browser startup failed. Check the Render logs."
-            )
+            whatsapp_status = "Browser startup failed. Check Render logs."
             whatsapp_qr_data = None
 
     finally:
         with whatsapp_lock:
             whatsapp_starting = False
 
-            # Keep the driver reference so a second browser
-            # is not accidentally started over the first.
             if driver is not None:
                 whatsapp_driver = driver
+                
 
 
 # --------------------------------------------------
