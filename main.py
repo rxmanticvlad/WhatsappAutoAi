@@ -84,6 +84,7 @@ def require_qr_auth(func):
 # CHROMIUM DRIVER
 # --------------------------------------------------
 
+
 def create_chrome_driver():
     options = Options()
 
@@ -92,16 +93,18 @@ def create_chrome_driver():
     )
 
     options.add_argument("--headless=new")
-options.add_argument("--disable-blink-features=AutomationControlled")
-options.add_argument(
-    "--user-agent=Mozilla/5.0 (X11; Linux x86_64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/131.0.0.0 Safari/537.36"
-)
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1280,1000")
+    options.add_argument(
+        "--disable-blink-features=AutomationControlled"
+    )
+    options.add_argument(
+        "--user-agent=Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    )
 
     driver_path = (
         os.getenv("CHROMEDRIVER_PATH")
@@ -113,7 +116,10 @@ options.add_argument(
     else:
         service = Service()
 
-    return webdriver.Chrome(service=service, options=options)
+    return webdriver.Chrome(
+        service=service,
+        options=options,
+    )
 
 
 # --------------------------------------------------
