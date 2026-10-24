@@ -470,9 +470,23 @@ def home():
     return "WhatsApp AI service is running. WhatsApp integration is not connected."
 
 
+
 @app.get("/health")
 def health():
-    return jsonify({"ok": True, "whatsapp_connected": False})
+    with whatsapp_lock:
+        connected = (
+            whatsapp_driver is not None
+            and whatsapp_status.startswith(
+                "WhatsApp Web appears logged in"
+            )
+        )
+        status = whatsapp_status
+
+    return jsonify({
+        "ok": True,
+        "whatsapp_connected": connected,
+        "whatsapp_status": status
+    })
 
 
 # Temporary testing endpoint.
