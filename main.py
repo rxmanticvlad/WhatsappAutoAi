@@ -12,6 +12,8 @@ from flask import Flask, jsonify, request, Response
 from functools import wraps
 import secrets
 import base64
+import threading
+import time
 from openai import OpenAI
 
 app = Flask(__name__)
@@ -76,7 +78,32 @@ def create_chrome_driver():
     ) or shutil.which("chromedriver")
 
     service = Service(executable_path=driver_path) if driver_path else Service()
-    return webdriver.Chrome(service=service, options=options)
+        return webdriver.Chrome(service=service, options=options)
+
+
+# WhatsApp browser session manager
+whatsapp_driver = None
+whatsapp_lock = threading.Lock()
+whatsapp_status = "Not started"
+whatsapp_qr_data = None
+
+
+def start_whatsapp_browser():
+    global whatsapp_driver, whatsapp_status, whatsapp_qr_data
+
+    with whatsapp_lock:
+        if whatsapp_driver is not None:
+            return
+
+        whatsapp_status = "Starting Chromium..."
+        try:
+            driver = create_chrome_driver()
+            driver.get("https://web.whatsapp.com/")
+            whatsapp_driver = driver
+            whatsapp_status = "Waiting for WhatsApp Web login"
+        except Exception:
+            app.logger.exception("WhatsApp browser startup failed")
+            whatsapp_status = "Browser startup failed"
 # OpenAI configuration
 api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key) if api_key else None
