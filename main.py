@@ -151,6 +151,7 @@ def create_chrome_driver():
 
 
 
+
 # WhatsApp browser session manager
 whatsapp_driver = None
 whatsapp_lock = threading.Lock()
@@ -160,20 +161,25 @@ whatsapp_starting = False
 
 
 def start_whatsapp_browser():
-    """Start exactly one browser and keep its QR image refreshed."""
-    global whatsapp_driver, whatsapp_status
-    global whatsapp_qr_data, whatsapp_starting
+    """Start one browser worker if one is not already running."""
+    global whatsapp_status, whatsapp_starting
 
-    # Reserve startup before launching the background thread.
     with whatsapp_lock:
-        if whatsapp_starting or whatsapp_driver is not None:
+        if whatsapp_starting:
             return
+
+        # Do not start another browser while an existing one is alive.
+        if whatsapp_driver is not None:
+            return
+
         whatsapp_starting = True
         whatsapp_status = "Starting Chromium..."
+        whatsapp_qr_data = None
 
     thread = threading.Thread(
         target=_whatsapp_browser_worker,
-        daemon=True
+        daemon=True,
+        name="whatsapp-browser-worker",
     )
     thread.start()
 
@@ -185,6 +191,7 @@ def _whatsapp_browser_worker():
     driver = None
 
     try:
+        app.logger.info("Starting Chromium for WhatsApp Web")
         driver = create_chrome_driver()
 
         with whatsapp_lock:
@@ -192,45 +199,20 @@ def _whatsapp_browser_worker():
             whatsapp_status = "Opening WhatsApp Web..."
             whatsapp_qr_data = None
 
+        driver.set_page_load_timeout(60)
         driver.get("https://web.whatsapp.com/")
 
-        # Wait for login, refreshing the QR screenshot while needed.
-        deadline = time.time() + 180
+        app.logger.info("WhatsApp Web page loaded")
+
+        deadline = time.time() + 240
 
         while time.time() < deadline:
             try:
-                # WhatsApp's page structure can change.
-                # Prefer the visible QR canvas when one is available.
-                canvases = driver.find_elements(By.CSS_SELECTOR, "canvas")
-                qr_png = None
-
-                for canvas in canvases:
-                    if canvas.is_displayed():
-                        png = canvas.screenshot_as_png
-                        if png:
-                            qr_png = png
-                            break
-
-                # A canvas may also be used for non-QR content.
-                # The image is shown only as a login aid; verify it
-                # visually on the protected QR page before scanning.
-                if qr_png:
-                    encoded = base64.b64encode(qr_png).decode("ascii")
-                    with whatsapp_lock:
-                        whatsapp_qr_data = encoded
-                        whatsapp_status = (
-                            "QR image found. Scan it with WhatsApp "
-                            "on your phone."
-                        )
-
-                # Common indicators that WhatsApp has opened its chats.
-                logged_in = (
+                # Detect login before looking for a QR.
+                logged_in = bool(
                     driver.find_elements(
                         By.CSS_SELECTOR,
-                        '[aria-label="Chat list"]'
-                    )
-                    or driver.find_elements(
-                        By.CSS_SELECTOR,
+                        '[aria-label="Chat list"], '
                         '[data-testid="chat-list"]'
                     )
                 )
@@ -242,43 +224,96 @@ def _whatsapp_browser_worker():
                             "WhatsApp Web appears logged in. "
                             "Automatic replies are not connected yet."
                         )
-                    break
+                    app.logger.info("WhatsApp login detected")
+                    return
+
+                # Look for a likely QR canvas rather than blindly
+                # accepting the first canvas on the page.
+                qr_png = None
+                canvases = driver.find_elements(
+                    By.CSS_SELECTOR, "canvas"
+                )
+
+                for canvas in canvases:
+                    try:
+                        if not canvas.is_displayed():
+                            continue
+
+                        width = canvas.size.get("width", 0)
+                        height = canvas.size.get("height", 0)
+
+                        # WhatsApp QR codes are generally square.
+                        if width < 100 or height < 100:
+                            continue
+
+                        if abs(width - height) > 30:
+                            continue
+
+                        screenshot = canvas.screenshot_as_png
+                        if screenshot:
+                            qr_png = screenshot
+                            break
+                    except Exception:
+                        continue
+
+                if qr_png:
+                    encoded = base64.b64encode(
+                        qr_png
+                    ).decode("ascii")
+
+                    with whatsapp_lock:
+                        whatsapp_qr_data = encoded
+                        whatsapp_status = (
+                            "A possible QR canvas was captured. "
+                            "Verify that the image is a QR code."
+                        )
+                else:
+                    with whatsapp_lock:
+                        if whatsapp_qr_data is None:
+                            whatsapp_status = (
+                                "Waiting for WhatsApp QR code..."
+                            )
 
                 time.sleep(3)
 
             except Exception:
                 app.logger.exception(
-                    "Error while checking WhatsApp QR/login state"
+                    "Error checking WhatsApp Web page"
                 )
+                with whatsapp_lock:
+                    whatsapp_status = (
+                        "WhatsApp page check failed. "
+                        "See Render logs."
+                    )
                 time.sleep(3)
 
-        else:
-            with whatsapp_lock:
-                if whatsapp_qr_data is None:
-                    whatsapp_status = (
-                        "No QR image detected within 3 minutes. "
-                        "Refresh the page and check Render logs."
-                    )
-                else:
-                    whatsapp_status = (
-                        "QR detected. If it expired, refresh the page "
-                        "or restart the service to request a new one."
-                    )
+        with whatsapp_lock:
+            if whatsapp_qr_data is None:
+                whatsapp_status = (
+                    "No suitable QR canvas found after 4 minutes. "
+                    "Check Render logs and browser-test."
+                )
+            else:
+                whatsapp_status = (
+                    "QR image captured. If expired, restart the "
+                    "service to request a fresh QR code."
+                )
 
     except Exception:
         app.logger.exception("WhatsApp browser startup failed")
         with whatsapp_lock:
-            whatsapp_status = "Browser startup failed. Check Render logs."
+            whatsapp_status = (
+                "Browser startup failed. Check Render logs."
+            )
             whatsapp_qr_data = None
 
-    
     finally:
+        # Keep the browser open after the worker finishes so that
+        # a successful login is not immediately lost.
         with whatsapp_lock:
-            if driver is None:
-                whatsapp_starting = False
-                whatsapp_driver = None
-            elif not whatsapp_driver:
-                whatsapp_starting = False
+            whatsapp_starting = False
+            if driver is not None:
+                whatsapp_driver = driver
 
 
 # OpenAI configuration
