@@ -293,6 +293,7 @@ def _whatsapp_browser_worker():
 # QR SETUP PAGE
 # --------------------------------------------------
 
+
 @app.get("/qr")
 @require_qr_auth
 def qr_page():
@@ -306,8 +307,17 @@ def qr_page():
     <body style="font-family:Arial;max-width:600px;margin:30px auto;padding:16px">
       <h2>WhatsApp QR Setup</h2>
       <p id="status">Checking browser status...</p>
+
       <div id="qr-container"></div>
-      <button onclick="refreshStatus()">Refresh</button>
+
+      <button id="refresh-btn" onclick="refreshWhatsApp()">
+        🔄 Refresh WhatsApp Web
+      </button>
+
+      <button id="restart-btn" onclick="restartSetup()"
+        style="margin-top:10px">
+        ♻️ Restart Setup from Beginning
+      </button>
 
       <script>
         async function refreshStatus() {
@@ -321,29 +331,79 @@ def qr_page():
             }
 
             const data = await response.json();
-
-            document.getElementById('status').textContent =
-              data.status;
+            document.getElementById('status').textContent = data.status;
 
             const container = document.getElementById('qr-container');
-let img = document.getElementById('whatsapp-qr');
+            let img = document.getElementById('whatsapp-qr');
 
-if (data.qr_available) {
-  if (!img) {
-    img = document.createElement('img');
-    img.id = 'whatsapp-qr';
-    img.alt = 'WhatsApp login QR code';
-    img.style.maxWidth = '100%';
-    container.appendChild(img);
-  }
+            if (data.qr_available) {
+              if (!img) {
+                img = document.createElement('img');
+                img.id = 'whatsapp-qr';
+                img.alt = 'WhatsApp login QR code';
+                img.style.maxWidth = '100%';
+                container.appendChild(img);
+              }
 
-  img.src = '/qr-image?t=' + Date.now();
-} else if (img) {
-  img.remove();
-}
+              img.src = '/qr-image?t=' + Date.now();
+            } else if (img) {
+              img.remove();
+            }
           } catch (error) {
             document.getElementById('status').textContent =
-              'Could not get status. Refresh and try again.';
+              'Could not get status. Please try again.';
+          }
+        }
+
+        async function refreshWhatsApp() {
+          const button = document.getElementById('refresh-btn');
+          button.disabled = true;
+          document.getElementById('status').textContent =
+            'Reloading WhatsApp Web...';
+
+          try {
+            const response = await fetch('/refresh-whatsapp', {
+              method: 'POST',
+              cache: 'no-store'
+            });
+
+            const data = await response.json();
+            document.getElementById('status').textContent = data.status;
+          } catch (error) {
+            document.getElementById('status').textContent =
+              'Refresh failed. Please check the server logs.';
+          } finally {
+            button.disabled = false;
+            refreshStatus();
+          }
+        }
+
+        async function restartSetup() {
+          if (!confirm(
+            'Restart WhatsApp setup? The current session will be closed.'
+          )) {
+            return;
+          }
+
+          const button = document.getElementById('restart-btn');
+          button.disabled = true;
+          document.getElementById('status').textContent =
+            'Restarting setup... Please wait.';
+
+          try {
+            const response = await fetch('/restart-whatsapp', {
+              method: 'POST',
+              cache: 'no-store'
+            });
+
+            const data = await response.json();
+            document.getElementById('status').textContent = data.status;
+          } catch (error) {
+            document.getElementById('status').textContent =
+              'Restart request failed. Check server logs.';
+          } finally {
+            button.disabled = false;
+            refreshStatus();
           }
         }
 
@@ -353,6 +413,7 @@ if (data.qr_available) {
     </body>
     </html>
     """
+    
 
 
 @app.get("/qr-status")
