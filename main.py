@@ -2,13 +2,34 @@
 import json
 import os
 import re
+import shutil
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from pathlib import Path
 
 from flask import Flask, jsonify, request
 from openai import OpenAI
 
 app = Flask(__name__)
+def create_chrome_driver():
+    options = Options()
+    options.binary_location = os.getenv(
+        "CHROME_BIN", "/usr/bin/chromium"
+    )
 
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1280,900")
+
+    driver_path = os.getenv(
+        "CHROMEDRIVER_PATH"
+    ) or shutil.which("chromedriver")
+
+    service = Service(executable_path=driver_path) if driver_path else Service()
+    return webdriver.Chrome(service=service, options=options)
 # OpenAI configuration
 api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key) if api_key else None
@@ -199,7 +220,26 @@ def reply():
     except Exception:
         app.logger.exception("AI reply generation failed")
         return jsonify({"error": "Could not generate a reply"}), 500
-
+@app.get("/browser-test")
+def browser_test():
+    driver = None
+    try:
+        driver = create_chrome_driver()
+        driver.get("https://example.com")
+        return jsonify({
+            "ok": True,
+            "title": driver.title,
+            "browser": "Chromium started successfully"
+        })
+    except Exception:
+        app.logger.exception("Chromium test failed")
+        return jsonify({
+            "ok": False,
+            "error": "Chromium could not start; check Render logs."
+        }), 500
+    finally:
+        if driver:
+            driver.quit()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "10000"))
