@@ -1,32 +1,29 @@
 
-FROM python:3.11-slim
+FROM node:20-bookworm-slim
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    wget \
-    gnupg \
-    && mkdir -p /etc/apt/keyrings \
-    && wget -q -O /etc/apt/keyrings/google-chrome.gpg \
-       https://dl.google.com/linux/linux_signing_key.pub \
-    && chmod 644 /etc/apt/keyrings/google-chrome.gpg \
-    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
-       > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-       google-chrome-stable \
+    python3 python3-venv ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY package.json ./
+RUN npm install --omit=dev
+
+COPY requirements.txt ./
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY . .
 
-ENV CHROME_BIN=/usr/bin/google-chrome
-ENV CHROMEDRIVER_PATH=""
+RUN printf '#!/bin/sh\nset -e\npython /app/ai_service.py &\nexec node /app/baileys.js\n' > /app/start.sh \
+    && chmod +x /app/start.sh
 
-CMD ["python", "main.py"]
+EXPOSE 10000
+
+CMD ["/app/start.sh"]
