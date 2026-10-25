@@ -1,0 +1,8 @@
+
+.git
+.env
+node_modules
+__pycache__
+*.pyc
+auth_info_baileys
+bot_state.json
